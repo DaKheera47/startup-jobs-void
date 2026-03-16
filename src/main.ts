@@ -1,32 +1,33 @@
-// For more information, see https://crawlee.dev/
-import { launchOptions } from 'camoufox-js';
-import { PlaywrightCrawler } from 'crawlee';
-import { firefox } from 'playwright';
+import { Dataset, log } from 'crawlee';
 
-import { router } from './routes.js';
+import { scrapeStartupJobsViaAlgolia } from './startupjobsApi.js';
 
-const startUrls = ['https://startup.jobs/?q=software'];
-const USER_AGENT =
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36';
+const DEFAULT_QUERY = process.env.STARTUPJOBS_QUERY ?? 'software';
+const DEFAULT_HITS_PER_PAGE = Number(process.env.STARTUPJOBS_HITS_PER_PAGE ?? '20');
+const DEFAULT_MAX_PAGES = Number(process.env.STARTUPJOBS_MAX_PAGES ?? '5');
 
-const crawler = new PlaywrightCrawler({
-    requestHandler: router,
-    maxRequestsPerCrawl: 100,
-    browserPoolOptions: {
-        // Disable the default fingerprint spoofing to avoid conflicts with Camoufox.
-        useFingerprints: false,
-    },
-    launchContext: {
-        launcher: firefox,
-        launchOptions: await launchOptions({
-            headless: true,
-            // Pass your own Camoufox parameters here...
-            // block_images: true,
-            // fonts: ['Times New Roman'],
-            // ...
-        }),
-        userAgent: USER_AGENT,
-    },
+function getOptionalEnv(name: string): string | undefined {
+    const value = process.env[name]?.trim();
+    return value ? value : undefined;
+}
+
+const records = await scrapeStartupJobsViaAlgolia({
+    query: DEFAULT_QUERY,
+    hitsPerPage: Number.isFinite(DEFAULT_HITS_PER_PAGE) ? DEFAULT_HITS_PER_PAGE : 20,
+    maxPages: Number.isFinite(DEFAULT_MAX_PAGES) ? DEFAULT_MAX_PAGES : 5,
+    aroundLatLng: getOptionalEnv('STARTUPJOBS_AROUND_LAT_LNG'),
+    aroundRadius: getOptionalEnv('STARTUPJOBS_AROUND_RADIUS'),
+    filters: getOptionalEnv('STARTUPJOBS_FILTERS'),
+    enrichDetails: true,
 });
 
-await crawler.run(startUrls);
+if (records.length === 0) {
+    log.warning('No jobs found for the current Startup Jobs search.');
+} else {
+    const dataset = await Dataset.open();
+    await dataset.pushData(records);
+    log.info('Stored Startup Jobs records from Algolia search.', {
+        count: records.length,
+        query: DEFAULT_QUERY,
+    });
+}
