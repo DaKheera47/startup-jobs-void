@@ -53,8 +53,10 @@
     "dependencies": {
         "apify": "^3.7.0",
         "camoufox-js": "^0.9.0",
+        "cheerio": "^1.2.0",
         "crawlee": "^3.0.0",
-        "playwright": "*"
+        "playwright": "*",
+        "wreq-js": "^2.2.0"
     },
     "devDependencies": {
         "@apify/tsconfig": "^0.1.0",

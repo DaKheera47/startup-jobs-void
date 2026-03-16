@@ -1,11 +1,8 @@
-import { launchOptions } from 'camoufox-js';
-import { firefox } from 'playwright';
-import type { BrowserContext } from 'playwright';
 import { log } from 'apify';
 
 import type { ScrapeOptions, StartupJobRecord } from './types.js';
-import { extractJobPage } from './routes.js';
 import { extractAlgoliaConfigInBrowser, USER_AGENT } from './algolia.js';
+import { createStartupJobsDetailSession, enrichJobRecordFromHtml } from './jobDetails.js';
 
 const BASE_URL = 'https://startup.jobs';
 const DETAIL_ENRICHMENT_CONCURRENCY = 2;
@@ -65,20 +62,14 @@ export async function scrapeStartupJobsViaAlgolia(options: ScrapeOptions): Promi
         return uniqueHits.map((hit) => buildRecordFromHit(hit));
     }
 
-    log.info('Launching browser for detail-page enrichment', { totalJobs: uniqueHits.length });
-    const browser = await firefox.launch(
-        await launchOptions({
-            headless: true,
-        }),
-    );
-    const context = await browser.newContext({ userAgent: USER_AGENT });
+    log.info('Creating wreq session for detail-page enrichment', { totalJobs: uniqueHits.length });
+    const detailSession = await createStartupJobsDetailSession();
 
     try {
-        return await mapWithConcurrency(uniqueHits, DETAIL_ENRICHMENT_CONCURRENCY, async (hit) => enrichHit(context, hit));
+        return await mapWithConcurrency(uniqueHits, DETAIL_ENRICHMENT_CONCURRENCY, async (hit) => enrichHit(detailSession, hit));
     } finally {
-        await context.close();
-        await browser.close();
-        log.info('Closed browser used for detail-page enrichment');
+        await detailSession.close();
+        log.info('Closed wreq session used for detail-page enrichment');
     }
 }
 
@@ -124,18 +115,16 @@ async function queryAlgolia(
 }
 
 async function enrichHit(
-    context: BrowserContext,
+    detailSession: Awaited<ReturnType<typeof createStartupJobsDetailSession>>,
     hit: StartupJobsAlgoliaHit,
 ): Promise<StartupJobRecord> {
     const baseRecord = buildRecordFromHit(hit);
     if (!baseRecord.jobUrl) return baseRecord;
 
-    log.info('Opening job detail page', { url: baseRecord.jobUrl });
-    const page = await context.newPage();
+    log.info('Fetching job detail page via wreq', { url: baseRecord.jobUrl });
 
     try {
-        await page.goto(baseRecord.jobUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 });
-        const enriched = await extractJobPage(page, baseRecord.jobUrl);
+        const enriched = await enrichJobRecordFromHtml(detailSession, baseRecord);
         log.info('Extracted job detail page successfully', { title: enriched.title, url: baseRecord.jobUrl });
         return enriched;
     } catch (error) {
@@ -144,8 +133,6 @@ async function enrichHit(
             url: baseRecord.jobUrl,
         });
         return baseRecord;
-    } finally {
-        await page.close();
     }
 }
 
