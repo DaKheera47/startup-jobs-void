@@ -3,12 +3,7 @@ import { log } from 'apify';
 import { buildAlgoliaQueryPayload } from './algoliaQuery.js';
 import type { ScrapeOptions, StartupJobRecord } from './types.js';
 import { extractAlgoliaConfigInBrowser, USER_AGENT } from './algolia.js';
-import {
-    closeStartupJobsBrowserFallback,
-    createStartupJobsDetailSession,
-    enrichJobRecordFromBrowser,
-    enrichJobRecordFromHtml,
-} from './jobDetails.js';
+import { createStartupJobsDetailSession, enrichJobRecordFromHtml } from './jobDetails.js';
 
 const BASE_URL = 'https://startup.jobs';
 const DEFAULT_DETAIL_ENRICHMENT_CONCURRENCY = 8;
@@ -86,7 +81,6 @@ export async function scrapeStartupJobsViaAlgolia(options: ScrapeOptions): Promi
         return await mapWithConcurrency(uniqueHits, detailConcurrency, async (hit) => enrichHit(detailSession, hit));
     } finally {
         await detailSession.close();
-        await closeStartupJobsBrowserFallback();
         log.info('Closed wreq session used for detail-page enrichment');
     }
 }
@@ -213,39 +207,12 @@ async function enrichHit(
         log.info('Extracted job detail page successfully', { title: enriched.title, url: baseRecord.jobUrl });
         return enriched;
     } catch (error) {
-        if (shouldRetryBlockedDetailRequest(error)) {
-            log.warning('wreq detail request was blocked; retrying in Playwright browser', {
-                error: error instanceof Error ? error.message : String(error),
-                url: baseRecord.jobUrl,
-            });
-
-            try {
-                const enriched = await enrichJobRecordFromBrowser(baseRecord);
-                log.info('Extracted job detail page successfully via browser fallback', {
-                    title: enriched.title,
-                    url: baseRecord.jobUrl,
-                });
-                return enriched;
-            } catch (fallbackError) {
-                log.warning('Browser fallback also failed; returning base Algolia record', {
-                    error: fallbackError instanceof Error ? fallbackError.message : String(fallbackError),
-                    url: baseRecord.jobUrl,
-                });
-                return baseRecord;
-            }
-        }
-
         log.warning('Failed to enrich job details; returning base Algolia record', {
             error: error instanceof Error ? error.message : String(error),
             url: baseRecord.jobUrl,
         });
         return baseRecord;
     }
-}
-
-function shouldRetryBlockedDetailRequest(error: unknown): boolean {
-    if (!(error instanceof Error)) return false;
-    return /Job detail request failed: (401|403|429)/.test(error.message);
 }
 
 function buildRecordFromHit(hit: StartupJobsAlgoliaHit): StartupJobRecord {

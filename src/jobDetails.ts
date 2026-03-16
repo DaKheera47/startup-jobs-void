@@ -1,7 +1,6 @@
 import { log } from 'apify';
 import { load } from 'cheerio';
 import { readFile } from 'node:fs/promises';
-import { chromium } from 'playwright';
 import { createSession } from 'wreq-js';
 import type { Session } from 'wreq-js';
 
@@ -11,8 +10,6 @@ import type { StartupJobRecord } from './types.js';
 const BASE_URL = 'https://startup.jobs';
 const DETAIL_BROWSER_PROFILE = 'chrome_124';
 const DETAIL_OS_PROFILE = 'macos';
-const DETAIL_BROWSER_FALLBACK_TIMEOUT_MS = 60_000;
-let browserFallbackPromise: Promise<Awaited<ReturnType<typeof chromium.launch>>> | null = null;
 
 interface StoredDebugCookie {
     domain?: string;
@@ -112,47 +109,6 @@ export async function enrichJobRecordFromHtml(session: Session, baseRecord: Star
     return extractJobPageFromHtml(html, baseRecord.jobUrl, baseRecord);
 }
 
-export async function enrichJobRecordFromBrowser(baseRecord: StartupJobRecord): Promise<StartupJobRecord> {
-    const browser = await getBrowserFallback();
-    const context = await browser.newContext({ userAgent: USER_AGENT });
-    const page = await context.newPage();
-
-    try {
-        const response = await page.goto(baseRecord.jobUrl, {
-            timeout: DETAIL_BROWSER_FALLBACK_TIMEOUT_MS,
-            waitUntil: 'domcontentloaded',
-        });
-
-        if (response && response.status() >= 400) {
-            throw new Error(`Browser detail request failed: ${response.status()}`);
-        }
-
-        await page.waitForSelector('h1', { timeout: 30_000 });
-        const html = await page.content();
-        return extractJobPageFromHtml(html, baseRecord.jobUrl, baseRecord);
-    } finally {
-        await page.close();
-        await context.close();
-    }
-}
-
-export async function closeStartupJobsBrowserFallback(): Promise<void> {
-    if (!browserFallbackPromise) return;
-
-    const browserPromise = browserFallbackPromise;
-    browserFallbackPromise = null;
-
-    try {
-        const browser = await browserPromise;
-        await browser.close();
-        log.info('Closed Playwright browser used for detail fallback');
-    } catch (error) {
-        log.warning('Unable to close Playwright browser used for detail fallback', {
-            error: error instanceof Error ? error.message : String(error),
-        });
-    }
-}
-
 async function seedSessionWithDebugCookies(session: Session): Promise<void> {
     const payload = await readDebugCookiesPayload();
     const cookies = payload?.cookies ?? [];
@@ -199,15 +155,6 @@ async function readDebugCookiesPayload(): Promise<StoredDebugCookiesPayload | nu
         });
         return null;
     }
-}
-
-async function getBrowserFallback(): Promise<Awaited<ReturnType<typeof chromium.launch>>> {
-    if (!browserFallbackPromise) {
-        browserFallbackPromise = chromium.launch({ headless: true });
-        log.info('Launching Playwright browser for blocked detail-page fallbacks');
-    }
-
-    return browserFallbackPromise;
 }
 
 function buildCookieUrl(cookie: StoredDebugCookie): string {
