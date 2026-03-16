@@ -1,8 +1,12 @@
+import { launchOptions } from 'camoufox-js';
+import { firefox } from 'playwright';
+import type { BrowserContext } from 'playwright';
+
 import type { StartupJobRecord } from './routes.js';
+import { extractJobPage } from './routes.js';
 import { extractAlgoliaConfigInBrowser, USER_AGENT } from './algolia.js';
 
 const BASE_URL = 'https://startup.jobs';
-const SCRIPT_JSON_LD_RE = /<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
 
 interface StartupJobsAlgoliaHit {
     _tags?: string[];
@@ -35,55 +39,6 @@ interface ScrapeOptions {
     query: string;
 }
 
-interface JobPostingJsonLd {
-    '@graph'?: unknown[];
-    '@type'?: string;
-    baseSalary?:
-        | {
-              currency?: string;
-              value?:
-                  | {
-                        unitText?: string;
-                        minValue?: number | string;
-                        maxValue?: number | string;
-                        value?: number | string;
-                    }
-                  | number
-                  | string;
-          }
-        | string;
-    description?: string;
-    employmentType?: string;
-    hiringOrganization?:
-        | {
-              name?: string;
-              sameAs?: string;
-          }
-        | string;
-    jobLocation?:
-        | {
-              address?:
-                  | {
-                        addressCountry?: string;
-                        addressLocality?: string;
-                        addressRegion?: string;
-                    }
-                  | string;
-          }
-        | Array<{
-              address?:
-                  | {
-                        addressCountry?: string;
-                        addressLocality?: string;
-                        addressRegion?: string;
-                    }
-                  | string;
-          }>;
-    occupationalCategory?: string;
-    title?: string;
-    validThrough?: string;
-}
-
 export async function scrapeStartupJobsViaAlgolia(options: ScrapeOptions): Promise<StartupJobRecord[]> {
     const config = await extractAlgoliaConfigInBrowser();
     const pagesToFetch = Math.max(1, options.maxPages);
@@ -112,7 +67,19 @@ export async function scrapeStartupJobsViaAlgolia(options: ScrapeOptions): Promi
         return uniqueHits.map((hit) => buildRecordFromHit(hit));
     }
 
-    return mapWithConcurrency(uniqueHits, 5, async (hit) => enrichHit(hit));
+    const browser = await firefox.launch(
+        await launchOptions({
+            headless: true,
+        }),
+    );
+    const context = await browser.newContext({ userAgent: USER_AGENT });
+
+    try {
+        return await mapWithConcurrency(uniqueHits, 5, async (hit) => enrichHit(context, hit));
+    } finally {
+        await context.close();
+        await browser.close();
+    }
 }
 
 async function queryAlgoliaPage(
@@ -152,47 +119,24 @@ async function queryAlgoliaPage(
     return (await response.json()) as AlgoliaQueryResponse;
 }
 
-async function enrichHit(hit: StartupJobsAlgoliaHit): Promise<StartupJobRecord> {
+async function enrichHit(
+    context: BrowserContext,
+    hit: StartupJobsAlgoliaHit,
+): Promise<StartupJobRecord> {
     const baseRecord = buildRecordFromHit(hit);
     if (!baseRecord.jobUrl) return baseRecord;
 
-    const response = await fetch(baseRecord.jobUrl, {
-        headers: {
-            'user-agent': USER_AGENT,
-        },
-    });
+    const page = await context.newPage();
 
-    if (!response.ok) {
+    try {
+        await page.goto(baseRecord.jobUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+        return await extractJobPage(page, baseRecord.jobUrl);
+    } catch (error) {
+        console.warn(`Failed to enrich job details for URL ${baseRecord.jobUrl}:`, error);
         return baseRecord;
+    } finally {
+        await page.close();
     }
-
-    const html = await response.text();
-    const jobPosting = extractJobPostingJsonLdFromHtml(html);
-    const description = stripHtml(jobPosting?.description) ?? baseRecord.jobDescription;
-    const applicationLink = extractApplicationLinkFromHtml(html);
-
-    return {
-        ...baseRecord,
-        title: cleanText(jobPosting?.title) ?? baseRecord.title,
-        employer: getHiringOrganizationName(jobPosting) ?? baseRecord.employer,
-        employerUrl:
-            cleanText(getHiringOrganizationUrl(jobPosting)) ??
-            extractCompanyProfileUrlFromHtml(html) ??
-            baseRecord.employerUrl,
-        applicationLink: applicationLink ?? baseRecord.applicationLink,
-        disciplines:
-            cleanText(
-                [baseRecord.disciplines, cleanText(jobPosting?.occupationalCategory), normalizeEmploymentType(jobPosting?.employmentType)]
-                    .filter(Boolean)
-                    .join(' | '),
-            ) ?? baseRecord.disciplines,
-        deadline: cleanText(jobPosting?.validThrough) ?? baseRecord.deadline,
-        salary: formatSalaryFromJsonLd(jobPosting) ?? baseRecord.salary,
-        location: buildLocationFromJsonLd(jobPosting) ?? baseRecord.location,
-        degreeRequired: extractDegreeRequirement(description) ?? baseRecord.degreeRequired,
-        starting: extractStarting(description) ?? baseRecord.starting,
-        jobDescription: description ?? baseRecord.jobDescription,
-    };
 }
 
 function buildRecordFromHit(hit: StartupJobsAlgoliaHit): StartupJobRecord {
@@ -231,81 +175,6 @@ function dedupeHits(hits: StartupJobsAlgoliaHit[]): StartupJobsAlgoliaHit[] {
     return deduped;
 }
 
-function extractJobPostingJsonLdFromHtml(html: string): JobPostingJsonLd | undefined {
-    for (const match of html.matchAll(SCRIPT_JSON_LD_RE)) {
-        const raw = cleanText(match[1]);
-        if (!raw) continue;
-
-        try {
-            const parsed = JSON.parse(raw) as unknown;
-            const jobPosting = findJobPosting(parsed);
-            if (jobPosting) return jobPosting;
-        } catch {
-            continue;
-        }
-    }
-
-    return undefined;
-}
-
-function findJobPosting(value: unknown): JobPostingJsonLd | undefined {
-    if (Array.isArray(value)) {
-        for (const entry of value) {
-            const match = findJobPosting(entry);
-            if (match) return match;
-        }
-        return undefined;
-    }
-
-    if (!value || typeof value !== 'object') return undefined;
-
-    const candidate = value as JobPostingJsonLd;
-    if (candidate['@type'] === 'JobPosting') return candidate;
-
-    if (Array.isArray(candidate['@graph'])) {
-        for (const entry of candidate['@graph']) {
-            const match = findJobPosting(entry);
-            if (match) return match;
-        }
-    }
-
-    return undefined;
-}
-
-function extractApplicationLinkFromHtml(html: string): string | undefined {
-    const match = html.match(/href=["']([^"']*\/apply\/[^"']+)["']/i);
-    return toAbsoluteUrl(match?.[1]) ?? undefined;
-}
-
-function extractCompanyProfileUrlFromHtml(html: string): string | undefined {
-    const match = html.match(/href=["']([^"']*\/company\/[^"']+)["']/i);
-    return toAbsoluteUrl(match?.[1]) ?? undefined;
-}
-
-function getHiringOrganizationName(jobPosting: JobPostingJsonLd | undefined): string | undefined {
-    if (!jobPosting?.hiringOrganization) return undefined;
-    if (typeof jobPosting.hiringOrganization === 'string') return cleanText(jobPosting.hiringOrganization) ?? undefined;
-    return cleanText(jobPosting.hiringOrganization.name) ?? undefined;
-}
-
-function getHiringOrganizationUrl(jobPosting: JobPostingJsonLd | undefined): string | undefined {
-    if (!jobPosting?.hiringOrganization || typeof jobPosting.hiringOrganization === 'string') return undefined;
-    return cleanText(jobPosting.hiringOrganization.sameAs) ?? undefined;
-}
-
-function buildLocationFromJsonLd(jobPosting: JobPostingJsonLd | undefined): string | undefined {
-    const locationSource = Array.isArray(jobPosting?.jobLocation) ? jobPosting?.jobLocation[0] : jobPosting?.jobLocation;
-    if (!locationSource || typeof locationSource !== 'object') return undefined;
-
-    const address = locationSource.address;
-    if (!address) return undefined;
-    if (typeof address === 'string') return cleanText(address) ?? undefined;
-
-    return (
-        cleanText([address.addressLocality, address.addressRegion, address.addressCountry].filter(Boolean).join(', ')) ?? undefined
-    );
-}
-
 function normalizeEmploymentType(value: string | undefined): string | undefined {
     return cleanText(value?.replace(/_/g, '-')) ?? undefined;
 }
@@ -324,26 +193,6 @@ function formatSalaryFromHit(hit: StartupJobsAlgoliaHit): string | undefined {
     return min ?? max ?? undefined;
 }
 
-function formatSalaryFromJsonLd(jobPosting: JobPostingJsonLd | undefined): string | undefined {
-    const salary = jobPosting?.baseSalary;
-    if (!salary) return undefined;
-    if (typeof salary === 'string') return cleanText(salary) ?? undefined;
-
-    const value = salary.value;
-    if (typeof value === 'number' || typeof value === 'string') return cleanText(String(value)) ?? undefined;
-    if (!value) return undefined;
-
-    const min = toFormattedAmount(value.minValue, salary.currency);
-    const max = toFormattedAmount(value.maxValue, salary.currency);
-    const exact = toFormattedAmount(value.value, salary.currency);
-    const unit = cleanText(value.unitText)?.toLowerCase();
-    const unitSuffix = unit ? ` per ${unit}` : '';
-
-    if (exact) return `${exact}${unitSuffix}`;
-    if (min && max) return `${min} - ${max}${unitSuffix}`;
-    return min ?? max ?? undefined;
-}
-
 function toFormattedAmount(value: number | string | null | undefined, currency: string | undefined): string | undefined {
     if (value == null) return undefined;
     const numeric = Number(value);
@@ -354,26 +203,6 @@ function toFormattedAmount(value: number | string | null | undefined, currency: 
         currency: currency || undefined,
         maximumFractionDigits: 0,
     }).format(numeric);
-}
-
-function extractDegreeRequirement(description: string | undefined): string | undefined {
-    const match = description?.match(
-        /\b(?:bachelor['’]?s|master['’]?s|phd|doctorate|degree required|college degree|required degree)[^.:\n]*/i,
-    );
-    return cleanText(match?.[0]) ?? undefined;
-}
-
-function extractStarting(description: string | undefined): string | undefined {
-    const startMatch = description?.match(/\b(?:start(?:ing)?|starts?)\b[^.:\n]*/i);
-    if (startMatch?.[0]) return cleanText(startMatch[0]) ?? undefined;
-
-    const immediateMatch = description?.match(/\bimmediate(?:ly)?\b[^.:\n]*/i);
-    return cleanText(immediateMatch?.[0]) ?? undefined;
-}
-
-function stripHtml(value: string | undefined): string | undefined {
-    if (!value) return undefined;
-    return cleanText(value.replace(/<[^>]+>/g, ' ')) ?? undefined;
 }
 
 function cleanText(value: string | null | undefined): string | null {

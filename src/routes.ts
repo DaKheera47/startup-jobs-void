@@ -1,4 +1,5 @@
 import { createPlaywrightRouter } from 'crawlee';
+import type { Locator, Page } from 'playwright';
 
 export interface StartupJobRecord {
     title: string;
@@ -159,10 +160,7 @@ router.addDefaultHandler(async ({ page, log, pushData, request, enqueueLinks }) 
 
 });
 
-async function extractJobPage(
-    page: Parameters<Parameters<typeof router.addDefaultHandler>[0]>[0]['page'],
-    pageUrl: string,
-): Promise<StartupJobRecord> {
+export async function extractJobPage(page: Page, pageUrl: string): Promise<StartupJobRecord> {
     const jsonLd = await extractJobPostingJsonLd(page);
 
     const title = (await getText(page.locator('h1').first())) ?? jsonLd?.title ?? 'Unknown title';
@@ -266,7 +264,7 @@ async function extractJobPage(
 }
 
 async function extractJobPostingJsonLd(
-    page: Parameters<Parameters<typeof router.addDefaultHandler>[0]>[0]['page'],
+    page: Page,
 ): Promise<JobPostingJsonLd | undefined> {
     const scripts = page.locator('script[type="application/ld+json"]');
     const scriptCount = await scripts.count();
@@ -293,7 +291,7 @@ async function extractJobPostingJsonLd(
 }
 
 async function findCardBodyTextByHeading(
-    page: Parameters<Parameters<typeof router.addDefaultHandler>[0]>[0]['page'],
+    page: Page,
     heading: string,
 ): Promise<string | null> {
     const cards = page.locator('div.rounded-lg');
@@ -396,7 +394,7 @@ function cleanText(value: string | null | undefined): string | null {
     return normalized ? normalized : null;
 }
 
-async function getText(locator: { count(): Promise<number>; first(): { textContent(): Promise<string | null> }; textContent?(): Promise<string | null> }): Promise<string | null> {
+async function getText(locator: Locator): Promise<string | null> {
     if ((await locator.count()) === 0) return null;
 
     if (typeof locator.textContent === 'function') {
@@ -406,11 +404,7 @@ async function getText(locator: { count(): Promise<number>; first(): { textConte
     return cleanText(await locator.first().textContent());
 }
 
-async function getHref(locator: {
-    count(): Promise<number>;
-    first(): { getAttribute(name: string): Promise<string | null> };
-    getAttribute?(name: string): Promise<string | null>;
-}): Promise<string | null> {
+async function getHref(locator: Locator): Promise<string | null> {
     if ((await locator.count()) === 0) return null;
 
     if (typeof locator.getAttribute === 'function') {

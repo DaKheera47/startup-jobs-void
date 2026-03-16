@@ -1,4 +1,5 @@
-import { chromium } from 'playwright';
+import { launchOptions } from 'camoufox-js';
+import { firefox } from 'playwright';
 
 const META_CONTENT_RE = /<meta\b[^>]*name=["']([^"']+)["'][^>]*content=["']([^"']*)["'][^>]*>/gi;
 const STARTUP_JOBS_URL = 'https://startup.jobs/?loc=Preston%2C+Lancashire%2C+United+Kingdom&q=Software&latlng=53.759%2C-2.699&since=30d&page=2';
@@ -48,7 +49,11 @@ export function extractAlgoliaConfig(html: string): AlgoliaConfig {
 }
 
 export async function extractAlgoliaConfigInBrowser(): Promise<AlgoliaConfig> {
-    const browser = await chromium.launch({ headless: true });
+    const browser = await firefox.launch(
+        await launchOptions({
+            headless: true,
+        }),
+    );
     const page = await browser.newPage({ userAgent: USER_AGENT });
 
     try {
