@@ -6,6 +6,7 @@ import type { ScrapeOptions } from './types.js';
 interface StartupJobsActorInput {
     aroundLatLng?: string;
     aroundRadius?: string;
+    detailConcurrency?: number;
     enrichDetails?: boolean;
     filters?: string;
     query?: string;
@@ -14,12 +15,14 @@ interface StartupJobsActorInput {
 
 function getDefaultInput(): ScrapeOptions {
     const requestedCount = Number(process.env.STARTUPJOBS_MAX_RESULTS ?? '20');
+    const detailConcurrency = Number(process.env.STARTUPJOBS_DETAIL_CONCURRENCY ?? '8');
 
     return {
         query: process.env.STARTUPJOBS_QUERY ?? 'software',
         requestedCount: Number.isFinite(requestedCount) ? requestedCount : 20,
         aroundLatLng: process.env.STARTUPJOBS_AROUND_LAT_LNG?.trim() || undefined,
         aroundRadius: process.env.STARTUPJOBS_AROUND_RADIUS?.trim() || undefined,
+        detailConcurrency: Number.isFinite(detailConcurrency) ? detailConcurrency : 8,
         filters: process.env.STARTUPJOBS_FILTERS?.trim() || undefined,
         enrichDetails: true,
     };
@@ -33,6 +36,9 @@ function normalizeInput(input: StartupJobsActorInput | undefined): ScrapeOptions
         requestedCount: Number.isFinite(input?.requestedCount) ? Number(input?.requestedCount) : defaults.requestedCount,
         aroundLatLng: input?.aroundLatLng?.trim() || defaults.aroundLatLng,
         aroundRadius: input?.aroundRadius?.trim() || defaults.aroundRadius,
+        detailConcurrency: Number.isFinite(input?.detailConcurrency)
+            ? Number(input?.detailConcurrency)
+            : defaults.detailConcurrency,
         filters: input?.filters?.trim() || defaults.filters,
         enrichDetails: input?.enrichDetails ?? defaults.enrichDetails,
     };

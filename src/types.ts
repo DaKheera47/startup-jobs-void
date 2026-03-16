@@ -16,6 +16,7 @@ export interface StartupJobRecord {
 export interface ScrapeOptions {
     aroundLatLng?: string;
     aroundRadius?: string;
+    detailConcurrency?: number;
     enrichDetails?: boolean;
     filters?: string;
     requestedCount: number;

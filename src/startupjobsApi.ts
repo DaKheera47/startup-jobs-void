@@ -5,7 +5,8 @@ import { extractAlgoliaConfigInBrowser, USER_AGENT } from './algolia.js';
 import { createStartupJobsDetailSession, enrichJobRecordFromHtml } from './jobDetails.js';
 
 const BASE_URL = 'https://startup.jobs';
-const DETAIL_ENRICHMENT_CONCURRENCY = 2;
+const DEFAULT_DETAIL_ENRICHMENT_CONCURRENCY = 8;
+const MAX_DETAIL_ENRICHMENT_CONCURRENCY = 16;
 
 interface StartupJobsAlgoliaHit {
     _tags?: string[];
@@ -29,7 +30,9 @@ interface AlgoliaQueryResponse {
 }
 
 export async function scrapeStartupJobsViaAlgolia(options: ScrapeOptions): Promise<StartupJobRecord[]> {
+    const detailConcurrency = resolveDetailConcurrency(options.detailConcurrency);
     log.info('Starting startup.jobs scrape via Algolia', {
+        detailConcurrency,
         enrichDetails: options.enrichDetails,
         query: options.query,
         requestedCount: options.requestedCount,
@@ -66,7 +69,7 @@ export async function scrapeStartupJobsViaAlgolia(options: ScrapeOptions): Promi
     const detailSession = await createStartupJobsDetailSession();
 
     try {
-        return await mapWithConcurrency(uniqueHits, DETAIL_ENRICHMENT_CONCURRENCY, async (hit) => enrichHit(detailSession, hit));
+        return await mapWithConcurrency(uniqueHits, detailConcurrency, async (hit) => enrichHit(detailSession, hit));
     } finally {
         await detailSession.close();
         log.info('Closed wreq session used for detail-page enrichment');
@@ -139,6 +142,7 @@ async function enrichHit(
 function buildRecordFromHit(hit: StartupJobsAlgoliaHit): StartupJobRecord {
     const workplaceType = normalizeWorkplaceType(hit.workplace_type_id);
     const employmentType = normalizeEmploymentType(hit.employment_type);
+    const employer = sanitizeEmployerName(hit.company_name);
     const location =
         cleanText(
             [hit.location, workplaceType && !containsIgnoreCase(hit.location, workplaceType) ? workplaceType : undefined]
@@ -148,7 +152,7 @@ function buildRecordFromHit(hit: StartupJobsAlgoliaHit): StartupJobRecord {
 
     return {
         title: cleanText(hit.title) ?? 'Unknown title',
-        employer: cleanText(hit.company_name) ?? 'Unknown employer',
+        employer: employer ?? 'Unknown employer',
         employerUrl: hit.company_slug ? `${BASE_URL}/company/${hit.company_slug}` : undefined,
         jobUrl: toAbsoluteUrl(hit.path) ?? BASE_URL,
         disciplines: cleanText([...(hit._tags ?? []), employmentType].filter(Boolean).join(' | ')) ?? undefined,
@@ -170,6 +174,18 @@ function dedupeHits(hits: StartupJobsAlgoliaHit[]): StartupJobsAlgoliaHit[] {
     }
 
     return deduped;
+}
+
+function resolveDetailConcurrency(value: number | undefined): number {
+    if (value == null || !Number.isFinite(value)) return DEFAULT_DETAIL_ENRICHMENT_CONCURRENCY;
+    return Math.max(1, Math.min(MAX_DETAIL_ENRICHMENT_CONCURRENCY, Math.floor(value)));
+}
+
+function sanitizeEmployerName(value: string | undefined): string | undefined {
+    const cleaned = cleanText(value);
+    if (!cleaned) return undefined;
+    if (/^\{\{\{.*\}\}\}$/.test(cleaned)) return undefined;
+    return cleaned;
 }
 
 function normalizeEmploymentType(value: string | undefined): string | undefined {
