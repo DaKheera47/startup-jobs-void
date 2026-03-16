@@ -8,6 +8,7 @@ import { extractJobPage } from './routes.js';
 import { extractAlgoliaConfigInBrowser, USER_AGENT } from './algolia.js';
 
 const BASE_URL = 'https://startup.jobs';
+const DETAIL_ENRICHMENT_CONCURRENCY = 2;
 
 interface StartupJobsAlgoliaHit {
     _tags?: string[];
@@ -73,7 +74,7 @@ export async function scrapeStartupJobsViaAlgolia(options: ScrapeOptions): Promi
     const context = await browser.newContext({ userAgent: USER_AGENT });
 
     try {
-        return await mapWithConcurrency(uniqueHits, 5, async (hit) => enrichHit(context, hit));
+        return await mapWithConcurrency(uniqueHits, DETAIL_ENRICHMENT_CONCURRENCY, async (hit) => enrichHit(context, hit));
     } finally {
         await context.close();
         await browser.close();
