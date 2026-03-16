@@ -1,6 +1,6 @@
 {
     "name": "startup-jobs-scraper",
-    "version": "0.0.2",
+    "version": "0.1.0",
     "type": "module",
     "description": "Node.js and TypeScript scraper library for startup.jobs job listings, remote jobs, and enriched job details, with a matching Apify Actor.",
     "main": "./dist/index.js",
