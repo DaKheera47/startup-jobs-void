@@ -6,11 +6,13 @@
     "query": {
       "title": "Search query",
       "type": "string",
+      "editor": "textfield",
       "description": "Search term passed to startup.jobs."
     },
     "requestedCount": {
       "title": "Requested count",
       "type": "integer",
+      "editor": "number",
       "description": "Maximum number of Algolia hits to request.",
       "default": 20,
       "minimum": 1
@@ -18,22 +20,26 @@
     "enrichDetails": {
       "title": "Enrich details",
       "type": "boolean",
+      "editor": "checkbox",
       "description": "Load each job detail page for richer output.",
       "default": true
     },
     "aroundLatLng": {
       "title": "Around lat/lng",
       "type": "string",
+      "editor": "textfield",
       "description": "Optional Algolia geolocation center, for example `53.759,-2.699`."
     },
     "aroundRadius": {
       "title": "Around radius",
       "type": "string",
+      "editor": "textfield",
       "description": "Optional Algolia radius in meters."
     },
     "filters": {
       "title": "Filters",
       "type": "string",
+      "editor": "textfield",
       "description": "Optional Algolia filters expression."
     }
   }
