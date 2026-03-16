@@ -5,6 +5,7 @@
 		"moduleResolution": "NodeNext",
 		"target": "ES2022",
 		"outDir": "dist",
+		"tsBuildInfoFile": "node_modules/.cache/tsconfig.tsbuildinfo",
 		"noUnusedLocals": false,
 		"lib": ["DOM"]
 	},

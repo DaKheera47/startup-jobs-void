@@ -1,20 +1,7 @@
 import { createPlaywrightRouter } from 'crawlee';
 import type { Locator, Page } from 'playwright';
 
-export interface StartupJobRecord {
-    title: string;
-    employer: string;
-    employerUrl?: string;
-    jobUrl: string;
-    applicationLink?: string;
-    disciplines?: string;
-    deadline?: string;
-    salary?: string;
-    location?: string;
-    degreeRequired?: string;
-    starting?: string;
-    jobDescription?: string;
-}
+import type { StartupJobRecord } from './types.js';
 
 interface ListingJobRecord {
     company: string | null;

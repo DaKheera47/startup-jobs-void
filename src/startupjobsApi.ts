@@ -2,7 +2,7 @@ import { launchOptions } from 'camoufox-js';
 import { firefox } from 'playwright';
 import type { BrowserContext } from 'playwright';
 
-import type { StartupJobRecord } from './routes.js';
+import type { ScrapeOptions, StartupJobRecord } from './types.js';
 import { extractJobPage } from './routes.js';
 import { extractAlgoliaConfigInBrowser, USER_AGENT } from './algolia.js';
 
@@ -27,15 +27,6 @@ interface AlgoliaQueryResponse {
     hits?: StartupJobsAlgoliaHit[];
     nbPages?: number;
     page?: number;
-}
-
-interface ScrapeOptions {
-    aroundLatLng?: string;
-    aroundRadius?: string;
-    enrichDetails?: boolean;
-    filters?: string;
-    requestedCount: number;
-    query: string;
 }
 
 export async function scrapeStartupJobsViaAlgolia(options: ScrapeOptions): Promise<StartupJobRecord[]> {

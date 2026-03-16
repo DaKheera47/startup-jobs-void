@@ -1,21 +1,42 @@
-# Startup Jobs Scraper
+# startupjobs
 
-Run the scraper with:
+Importable library functions for scraping listings and job details from `startup.jobs`.
 
-```bash
-npm run start:dev
-```
-
-You can control the search with environment variables:
-
-- `STARTUPJOBS_QUERY` defaults to `software`
-- `STARTUPJOBS_MAX_RESULTS` defaults to `20`
-- `STARTUPJOBS_HITS_PER_PAGE` is still accepted as a backward-compatible alias
-
-Example:
+## Install
 
 ```bash
-STARTUPJOBS_QUERY=design STARTUPJOBS_MAX_RESULTS=25 npm run start:dev
+npm install startupjobs
 ```
 
-The scraper now makes a single Algolia request and uses the requested result count as `hitsPerPage`, so there is no pagination step.
+Browser binaries are not downloaded automatically on install. If you want detail-page enrichment, install them explicitly:
+
+```bash
+npm run browsers:install
+```
+
+## Usage
+
+```ts
+import { scrapeStartupJobsViaAlgolia } from 'startupjobs';
+
+const jobs = await scrapeStartupJobsViaAlgolia({
+  query: 'software engineer',
+  requestedCount: 20,
+  enrichDetails: true,
+});
+```
+
+## API
+
+`scrapeStartupJobsViaAlgolia(options)` returns an array of normalized job records.
+
+Supported options:
+
+- `query`
+- `requestedCount`
+- `enrichDetails`
+- `aroundLatLng`
+- `aroundRadius`
+- `filters`
+
+When `enrichDetails` is `false`, the library returns records built directly from Algolia hits without loading each job page.
