@@ -1,6 +1,7 @@
 import { launchOptions } from 'camoufox-js';
 import { firefox } from 'playwright';
 import type { BrowserContext } from 'playwright';
+import { log } from 'apify';
 
 import type { ScrapeOptions, StartupJobRecord } from './types.js';
 import { extractJobPage } from './routes.js';
@@ -30,8 +31,20 @@ interface AlgoliaQueryResponse {
 }
 
 export async function scrapeStartupJobsViaAlgolia(options: ScrapeOptions): Promise<StartupJobRecord[]> {
+    log.info('Starting startup.jobs scrape via Algolia', {
+        enrichDetails: options.enrichDetails,
+        query: options.query,
+        requestedCount: options.requestedCount,
+    });
     const config = await extractAlgoliaConfigInBrowser();
     const requestedCount = Math.max(1, options.requestedCount);
+    log.info('Querying Algolia for startup.jobs hits', {
+        aroundLatLng: options.aroundLatLng,
+        aroundRadius: options.aroundRadius,
+        filters: options.filters,
+        hitsPerPage: requestedCount,
+        query: options.query,
+    });
     const result = await queryAlgolia(config, {
         aroundLatLng: options.aroundLatLng,
         aroundRadius: options.aroundRadius,
@@ -40,11 +53,18 @@ export async function scrapeStartupJobsViaAlgolia(options: ScrapeOptions): Promi
         query: options.query,
     });
     const uniqueHits = dedupeHits(result.hits ?? []);
+    log.info('Received Algolia results', {
+        page: result.page,
+        totalHits: result.hits?.length ?? 0,
+        uniqueHits: uniqueHits.length,
+    });
 
     if (!options.enrichDetails) {
+        log.info('Skipping detail enrichment and returning Algolia hit records only');
         return uniqueHits.map((hit) => buildRecordFromHit(hit));
     }
 
+    log.info('Launching browser for detail-page enrichment', { totalJobs: uniqueHits.length });
     const browser = await firefox.launch(
         await launchOptions({
             headless: true,
@@ -57,6 +77,7 @@ export async function scrapeStartupJobsViaAlgolia(options: ScrapeOptions): Promi
     } finally {
         await context.close();
         await browser.close();
+        log.info('Closed browser used for detail-page enrichment');
     }
 }
 
@@ -92,7 +113,13 @@ async function queryAlgolia(
         throw new Error(`Algolia query failed: ${response.status}`);
     }
 
-    return (await response.json()) as AlgoliaQueryResponse;
+    const parsed = (await response.json()) as AlgoliaQueryResponse;
+    log.info('Algolia query completed successfully', {
+        hits: parsed.hits?.length ?? 0,
+        nbPages: parsed.nbPages,
+        page: parsed.page,
+    });
+    return parsed;
 }
 
 async function enrichHit(
@@ -102,13 +129,19 @@ async function enrichHit(
     const baseRecord = buildRecordFromHit(hit);
     if (!baseRecord.jobUrl) return baseRecord;
 
+    log.info('Opening job detail page', { url: baseRecord.jobUrl });
     const page = await context.newPage();
 
     try {
         await page.goto(baseRecord.jobUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 });
-        return await extractJobPage(page, baseRecord.jobUrl);
+        const enriched = await extractJobPage(page, baseRecord.jobUrl);
+        log.info('Extracted job detail page successfully', { title: enriched.title, url: baseRecord.jobUrl });
+        return enriched;
     } catch (error) {
-        console.warn(`Failed to enrich job details for URL ${baseRecord.jobUrl}:`, error);
+        log.warning('Failed to enrich job details; returning base Algolia record', {
+            error: error instanceof Error ? error.message : String(error),
+            url: baseRecord.jobUrl,
+        });
         return baseRecord;
     } finally {
         await page.close();
@@ -208,6 +241,7 @@ async function mapWithConcurrency<T, R>(
 ): Promise<R[]> {
     const results: R[] = new Array(items.length);
     let nextIndex = 0;
+    let completed = 0;
 
     await Promise.all(
         Array.from({ length: Math.min(concurrency, items.length) }, async () => {
@@ -215,6 +249,11 @@ async function mapWithConcurrency<T, R>(
                 const currentIndex = nextIndex;
                 nextIndex += 1;
                 results[currentIndex] = await mapper(items[currentIndex], currentIndex);
+                completed += 1;
+                log.info('Completed job processing progress', {
+                    completed,
+                    total: items.length,
+                });
             }
         }),
     );

@@ -1,5 +1,6 @@
 import { launchOptions } from 'camoufox-js';
 import { firefox } from 'playwright';
+import { log } from 'apify';
 
 const META_CONTENT_RE = /<meta\b[^>]*name=["']([^"']+)["'][^>]*content=["']([^"']*)["'][^>]*>/gi;
 const STARTUP_JOBS_URL = 'https://startup.jobs/?loc=Preston%2C+Lancashire%2C+United+Kingdom&q=Software&latlng=53.759%2C-2.699&since=30d&page=2';
@@ -49,6 +50,7 @@ export function extractAlgoliaConfig(html: string): AlgoliaConfig {
 }
 
 export async function extractAlgoliaConfigInBrowser(): Promise<AlgoliaConfig> {
+    log.info('Launching browser to extract Algolia config', { url: STARTUP_JOBS_URL });
     const browser = await firefox.launch(
         await launchOptions({
             headless: true,
@@ -57,13 +59,21 @@ export async function extractAlgoliaConfigInBrowser(): Promise<AlgoliaConfig> {
     const page = await browser.newPage({ userAgent: USER_AGENT });
 
     try {
+        log.info('Opening startup.jobs search page for Algolia config');
         await page.goto(STARTUP_JOBS_URL, { waitUntil: 'domcontentloaded' });
+        log.info('Waiting for search input selector to confirm page loaded', { selector: '#alert_query' });
         await page.waitForSelector('#alert_query', { timeout: 30_000 });
 
         const html = await page.content();
-        return extractAlgoliaConfig(html);
+        const config = extractAlgoliaConfig(html);
+        log.info('Extracted Algolia config from page metadata', {
+            applicationId: config.applicationId,
+            indexPost: config.indexPost,
+        });
+        return config;
     } finally {
         await page.close();
         await browser.close();
+        log.info('Closed browser used for Algolia config extraction');
     }
 }
