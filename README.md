@@ -1,6 +1,6 @@
-# startupjobs
+# startup-jobs-scraper
 
-`startupjobs` is a Node.js and TypeScript scraper library for `startup.jobs`. It gives you importable functions for fetching startup job listings, remote jobs, and enriched startup job details, and the same codebase also runs as an Apify Actor.
+`startup-jobs-scraper` is a Node.js and TypeScript scraper library for `startup.jobs`. It gives you importable functions for fetching startup job listings, remote jobs, and enriched startup job details, and the same codebase also runs as an Apify Actor.
 
 ## Why use it
 
@@ -12,7 +12,7 @@
 ## Install
 
 ```bash
-npm install startupjobs
+npm install startup-jobs-scraper
 ```
 
 Browser binaries are not downloaded automatically on install. If you want detail-page enrichment, install them explicitly:
@@ -24,7 +24,7 @@ npm run browsers:install
 ## Usage
 
 ```ts
-import { scrapeStartupJobsViaAlgolia } from 'startupjobs';
+import { scrapeStartupJobsViaAlgolia } from 'startup-jobs-scraper';
 
 const jobs = await scrapeStartupJobsViaAlgolia({
   query: 'software engineer',
