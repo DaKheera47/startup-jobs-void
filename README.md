@@ -46,7 +46,36 @@ Supported options include:
 - `enrichDetails`
 - `aroundLatLng`
 - `aroundRadius`
+- `page`
+- `hitsPerPage`
+- `since`
+- `hasSalary`
+- `salaryMinUsd`
+- `salaryMaxUsd`
+- `workplaceType`
+- `employmentType`
+- `experienceBucket`
+- `facetFilters`
 - `filters`
+
+The scraper now builds Algolia filters for the common startup.jobs fields and still lets you pass raw `filters` and `facetFilters` when you need an escape hatch.
+
+```ts
+const jobs = await scrapeStartupJobsViaAlgolia({
+  query: 'software engineer',
+  aroundLatLng: '51.5074,-0.1278',
+  aroundRadius: 'all',
+  since: '7d',
+  hasSalary: true,
+  salaryMinUsd: 100000,
+  workplaceType: ['remote'],
+  employmentType: ['full-time'],
+  experienceBucket: ['3-6'],
+  hitsPerPage: 50,
+  page: 0,
+  enrichDetails: false,
+});
+```
 
 When `enrichDetails` is `false`, the library returns records built directly from Algolia hits without loading each job page.
 

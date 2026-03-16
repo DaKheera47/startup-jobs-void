@@ -1,5 +1,6 @@
 import { log } from 'apify';
 
+import { buildAlgoliaQueryPayload } from './algoliaQuery.js';
 import type { ScrapeOptions, StartupJobRecord } from './types.js';
 import { extractAlgoliaConfigInBrowser, USER_AGENT } from './algolia.js';
 import { createStartupJobsDetailSession, enrichJobRecordFromHtml } from './jobDetails.js';
@@ -34,25 +35,18 @@ export async function scrapeStartupJobsViaAlgolia(options: ScrapeOptions): Promi
     log.info('Starting startup.jobs scrape via Algolia', {
         detailConcurrency,
         enrichDetails: options.enrichDetails,
+        hitsPerPage: options.hitsPerPage,
+        page: options.page,
         query: options.query,
         requestedCount: options.requestedCount,
+        since: options.since,
     });
     const config = await extractAlgoliaConfigInBrowser();
-    const requestedCount = Math.max(1, options.requestedCount);
+    const payload = buildAlgoliaQueryPayload(options);
     log.info('Querying Algolia for startup.jobs hits', {
-        aroundLatLng: options.aroundLatLng,
-        aroundRadius: options.aroundRadius,
-        filters: options.filters,
-        hitsPerPage: requestedCount,
-        query: options.query,
+        ...payload,
     });
-    const result = await queryAlgolia(config, {
-        aroundLatLng: options.aroundLatLng,
-        aroundRadius: options.aroundRadius,
-        filters: options.filters,
-        hitsPerPage: requestedCount,
-        query: options.query,
-    });
+    const result = await queryAlgolia(config, payload);
     const uniqueHits = dedupeHits(result.hits ?? []);
     log.info('Received Algolia results', {
         page: result.page,
@@ -80,9 +74,11 @@ async function queryAlgolia(
     config: Awaited<ReturnType<typeof extractAlgoliaConfigInBrowser>>,
     options: {
         aroundLatLng?: string;
-        aroundRadius?: string;
+        aroundRadius?: string | number;
+        facetFilters?: string[][];
         filters?: string;
         hitsPerPage: number;
+        page?: number;
         query: string;
     },
 ): Promise<AlgoliaQueryResponse> {
@@ -97,9 +93,10 @@ async function queryAlgolia(
         body: JSON.stringify({
             aroundLatLng: options.aroundLatLng,
             aroundRadius: options.aroundRadius,
-            facetFilters: [],
+            facetFilters: options.facetFilters ?? [],
             filters: options.filters ?? '',
             hitsPerPage: options.hitsPerPage,
+            page: options.page,
             query: options.query,
         }),
     });
