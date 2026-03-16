@@ -2,7 +2,7 @@
     "name": "startupjobs",
     "version": "0.0.1",
     "type": "module",
-    "description": "Library functions for scraping startup.jobs listings and job details.",
+    "description": "Node.js and TypeScript scraper library for startup.jobs job listings, remote jobs, and enriched job details, with a matching Apify Actor.",
     "main": "./dist/index.js",
     "types": "./dist/index.d.ts",
     "exports": {
@@ -11,17 +11,39 @@
             "import": "./dist/index.js"
         }
     },
+    "sideEffects": false,
     "files": [
         "dist",
         "README.md"
     ],
     "keywords": [
+        "startupjobs",
         "startup-jobs",
         "startup.jobs",
+        "startup jobs",
         "jobs",
+        "job listings",
+        "job scraper",
+        "startup job scraper",
+        "startup jobs api",
+        "remote jobs",
+        "remote job scraper",
         "scraper",
-        "algolia"
+        "algolia",
+        "playwright",
+        "crawlee",
+        "apify",
+        "apify actor",
+        "typescript"
     ],
+    "homepage": "https://github.com/DaKheera47/startup-jobs-void#readme",
+    "bugs": {
+        "url": "https://github.com/DaKheera47/startup-jobs-void/issues"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/DaKheera47/startup-jobs-void.git"
+    },
     "engines": {
         "node": ">=20"
     },
