@@ -11,7 +11,7 @@ const USER_AGENT =
 
 const crawler = new PlaywrightCrawler({
     requestHandler: router,
-    maxRequestsPerCrawl: 1,
+    maxRequestsPerCrawl: 100,
     browserPoolOptions: {
         // Disable the default fingerprint spoofing to avoid conflicts with Camoufox.
         useFingerprints: false,
