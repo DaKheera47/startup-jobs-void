@@ -98,24 +98,42 @@ router.addDefaultHandler(async ({ page, log, pushData, request, enqueueLinks }) 
     for (let index = 0; index < cardCount; index++) {
         const card = cards.nth(index);
         const titleLink = card.locator('[data-mark-visited-links-target="anchor"]').first();
-        const companyLink = card.locator('a[href^="/company/"]').first();
         const visibleRemote = card.locator('[data-post-template-target="workplaceRemote"]:not(.hidden)').first();
         const visibleHybrid = card.locator('[data-post-template-target="workplaceHybrid"]:not(.hidden)').first();
         const tagLocators = card.locator('[data-post-template-target="tags"] a');
         const timeElement = card.locator('time[data-post-template-target="timestamp"]').first();
         const tagCount = await tagLocators.count();
         const tags: string[] = [];
+        const companyAnchors = card.locator('a[href^="/company/"]');
+        const companyAnchorCount = await companyAnchors.count();
+        let company: string | null = null;
+        let companyUrl: string | null = null;
 
         for (let tagIndex = 0; tagIndex < tagCount; tagIndex++) {
             const tagText = cleanText(await tagLocators.nth(tagIndex).textContent());
             if (tagText) tags.push(tagText);
         }
 
+        for (let companyIndex = 0; companyIndex < companyAnchorCount; companyIndex++) {
+            const companyAnchor = companyAnchors.nth(companyIndex);
+            const companyText = await getText(companyAnchor);
+
+            if (companyText && !company) {
+                company = companyText;
+                companyUrl = toAbsoluteUrl(await getHref(companyAnchor));
+                break;
+            }
+
+            if (!companyUrl) {
+                companyUrl = toAbsoluteUrl(await getHref(companyAnchor));
+            }
+        }
+
         jobs.push({
             title: await getText(titleLink),
             url: toAbsoluteUrl(await getHref(titleLink)),
-            company: await getText(companyLink),
-            companyUrl: toAbsoluteUrl(await getHref(companyLink)),
+            company,
+            companyUrl,
             location: await getText(card.locator('[data-post-template-target="location"]').first()),
             workplaceType: (await getText(visibleRemote)) ?? (await getText(visibleHybrid)),
             tags,
@@ -139,12 +157,6 @@ router.addDefaultHandler(async ({ page, log, pushData, request, enqueueLinks }) 
 
     log.info(`Extracted ${jobs.length} listing jobs and enqueued detail pages`, { url: request.loadedUrl });
 
-    await pushData(
-        jobs.map((job) => ({
-            ...job,
-            sourceUrl: request.loadedUrl,
-        })),
-    );
 });
 
 async function extractJobPage(
@@ -235,7 +247,7 @@ async function extractJobPage(
     );
 
     const degreeRequired = extractDegreeRequirement(descriptionText);
-    const starting = extractStarting(descriptionText) ?? cleanText(jsonLd?.datePosted) ?? undefined;
+    const starting = extractStarting(descriptionText);
 
     return {
         title,
@@ -360,7 +372,9 @@ function toFormattedAmount(value: number | string | undefined, currency: string 
 }
 
 function extractDegreeRequirement(description: string | undefined): string | undefined {
-    const match = description?.match(/\b(?:bachelor'?s|master'?s|phd|doctorate|degree required|college degree|required degree)[^.:\n]*/i);
+    const match = description?.match(
+        /\b(?:bachelor['’]?s|master['’]?s|phd|doctorate|degree required|college degree|required degree)[^.:\n]*/i,
+    );
     return cleanText(match?.[0]) ?? undefined;
 }
 
