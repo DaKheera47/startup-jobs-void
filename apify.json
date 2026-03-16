@@ -1,0 +1,7 @@
+{
+  "actorSpecification": 1,
+  "name": "startupjobs",
+  "title": "Startup Jobs Scraper",
+  "description": "Scrapes startup.jobs listings and detail pages using a shared npm library core.",
+  "version": "0.1"
+}

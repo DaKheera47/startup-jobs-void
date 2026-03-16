@@ -1,31 +1,52 @@
-import { Dataset, log } from 'crawlee';
+import { Actor, log } from 'apify';
 
 import { scrapeStartupJobsViaAlgolia } from './startupjobsApi.js';
+import type { ScrapeOptions } from './types.js';
 
-const DEFAULT_QUERY = process.env.STARTUPJOBS_QUERY ?? 'software';
-const DEFAULT_REQUESTED_COUNT = Number(process.env.STARTUPJOBS_MAX_RESULTS ?? '20');
-
-function getOptionalEnv(name: string): string | undefined {
-    const value = process.env[name]?.trim();
-    return value ? value : undefined;
+interface StartupJobsActorInput {
+    aroundLatLng?: string;
+    aroundRadius?: string;
+    enrichDetails?: boolean;
+    filters?: string;
+    query?: string;
+    requestedCount?: number;
 }
 
-const records = await scrapeStartupJobsViaAlgolia({
-    query: DEFAULT_QUERY,
-    requestedCount: Number.isFinite(DEFAULT_REQUESTED_COUNT) ? DEFAULT_REQUESTED_COUNT : 20,
-    aroundLatLng: getOptionalEnv('STARTUPJOBS_AROUND_LAT_LNG'),
-    aroundRadius: getOptionalEnv('STARTUPJOBS_AROUND_RADIUS'),
-    filters: getOptionalEnv('STARTUPJOBS_FILTERS'),
-    enrichDetails: true,
-});
+function getDefaultInput(): ScrapeOptions {
+    const requestedCount = Number(process.env.STARTUPJOBS_MAX_RESULTS ?? '20');
 
-if (records.length === 0) {
-    log.warning('No jobs found for the current Startup Jobs search.');
-} else {
-    const dataset = await Dataset.open();
-    await dataset.pushData(records);
-    log.info('Stored Startup Jobs records from Algolia search.', {
+    return {
+        query: process.env.STARTUPJOBS_QUERY ?? 'software',
+        requestedCount: Number.isFinite(requestedCount) ? requestedCount : 20,
+        aroundLatLng: process.env.STARTUPJOBS_AROUND_LAT_LNG?.trim() || undefined,
+        aroundRadius: process.env.STARTUPJOBS_AROUND_RADIUS?.trim() || undefined,
+        filters: process.env.STARTUPJOBS_FILTERS?.trim() || undefined,
+        enrichDetails: true,
+    };
+}
+
+function normalizeInput(input: StartupJobsActorInput | undefined): ScrapeOptions {
+    const defaults = getDefaultInput();
+
+    return {
+        query: input?.query?.trim() || defaults.query,
+        requestedCount: Number.isFinite(input?.requestedCount) ? Number(input?.requestedCount) : defaults.requestedCount,
+        aroundLatLng: input?.aroundLatLng?.trim() || defaults.aroundLatLng,
+        aroundRadius: input?.aroundRadius?.trim() || defaults.aroundRadius,
+        filters: input?.filters?.trim() || defaults.filters,
+        enrichDetails: input?.enrichDetails ?? defaults.enrichDetails,
+    };
+}
+
+await Actor.main(async () => {
+    const input = await Actor.getInput<StartupJobsActorInput>();
+    const options = normalizeInput(input ?? undefined);
+    const records = await scrapeStartupJobsViaAlgolia(options);
+
+    await Actor.pushData(records);
+
+    log.info('Stored Startup Jobs records.', {
         count: records.length,
-        query: DEFAULT_QUERY,
+        query: options.query,
     });
-}
+});

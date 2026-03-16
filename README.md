@@ -40,3 +40,13 @@ Supported options:
 - `filters`
 
 When `enrichDetails` is `false`, the library returns records built directly from Algolia hits without loading each job page.
+
+## Apify Actor
+
+The same codebase can also run as an Apify Actor. The actor entrypoint lives in [src/main.ts](/Users/ssarfaraz/coding/scraping/startupjobs/src/main.ts) and forwards actor input into the shared library.
+
+For local actor-style runs:
+
+```bash
+npm run actor:start:dev
+```
