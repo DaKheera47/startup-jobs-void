@@ -1,8 +1,21 @@
-# Crawlee + PlaywrightCrawler + Camoufox + TypeScript project
+# Startup Jobs Scraper
 
-This template is a production ready boilerplate for developing with `PlaywrightCrawler`. Use this to bootstrap your projects using the most up-to-date code.
+Run the scraper with:
 
-If you're looking for examples or want to learn more visit:
+```bash
+npm run start:dev
+```
 
-- [Documentation](https://crawlee.dev/js/api/playwright-crawler/class/PlaywrightCrawler)
-- [Examples](https://crawlee.dev/js/docs/examples/playwright-crawler)
+You can control the search with environment variables:
+
+- `STARTUPJOBS_QUERY` defaults to `software`
+- `STARTUPJOBS_MAX_RESULTS` defaults to `20`
+- `STARTUPJOBS_HITS_PER_PAGE` is still accepted as a backward-compatible alias
+
+Example:
+
+```bash
+STARTUPJOBS_QUERY=design STARTUPJOBS_MAX_RESULTS=25 npm run start:dev
+```
+
+The scraper now makes a single Algolia request and uses the requested result count as `hitsPerPage`, so there is no pagination step.

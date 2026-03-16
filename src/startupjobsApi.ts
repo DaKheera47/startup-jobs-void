@@ -34,34 +34,21 @@ interface ScrapeOptions {
     aroundRadius?: string;
     enrichDetails?: boolean;
     filters?: string;
-    hitsPerPage: number;
-    maxPages: number;
+    requestedCount: number;
     query: string;
 }
 
 export async function scrapeStartupJobsViaAlgolia(options: ScrapeOptions): Promise<StartupJobRecord[]> {
     const config = await extractAlgoliaConfigInBrowser();
-    const pagesToFetch = Math.max(1, options.maxPages);
-    const hitsPerPage = Math.max(1, options.hitsPerPage);
-    const allHits: StartupJobsAlgoliaHit[] = [];
-
-    for (let page = 0; page < pagesToFetch; page++) {
-        const result = await queryAlgoliaPage(config, {
-            aroundLatLng: options.aroundLatLng,
-            aroundRadius: options.aroundRadius,
-            filters: options.filters,
-            hitsPerPage,
-            page,
-            query: options.query,
-        });
-
-        allHits.push(...(result.hits ?? []));
-
-        const nbPages = result.nbPages ?? 0;
-        if (page + 1 >= nbPages) break;
-    }
-
-    const uniqueHits = dedupeHits(allHits);
+    const requestedCount = Math.max(1, options.requestedCount);
+    const result = await queryAlgolia(config, {
+        aroundLatLng: options.aroundLatLng,
+        aroundRadius: options.aroundRadius,
+        filters: options.filters,
+        hitsPerPage: requestedCount,
+        query: options.query,
+    });
+    const uniqueHits = dedupeHits(result.hits ?? []);
 
     if (!options.enrichDetails) {
         return uniqueHits.map((hit) => buildRecordFromHit(hit));
@@ -82,14 +69,13 @@ export async function scrapeStartupJobsViaAlgolia(options: ScrapeOptions): Promi
     }
 }
 
-async function queryAlgoliaPage(
+async function queryAlgolia(
     config: Awaited<ReturnType<typeof extractAlgoliaConfigInBrowser>>,
     options: {
         aroundLatLng?: string;
         aroundRadius?: string;
         filters?: string;
         hitsPerPage: number;
-        page: number;
         query: string;
     },
 ): Promise<AlgoliaQueryResponse> {
@@ -107,13 +93,12 @@ async function queryAlgoliaPage(
             facetFilters: [],
             filters: options.filters ?? '',
             hitsPerPage: options.hitsPerPage,
-            page: options.page,
             query: options.query,
         }),
     });
 
     if (!response.ok) {
-        throw new Error(`Algolia query failed for page ${options.page}: ${response.status}`);
+        throw new Error(`Algolia query failed: ${response.status}`);
     }
 
     return (await response.json()) as AlgoliaQueryResponse;

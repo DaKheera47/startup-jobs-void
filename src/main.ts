@@ -3,8 +3,7 @@ import { Dataset, log } from 'crawlee';
 import { scrapeStartupJobsViaAlgolia } from './startupjobsApi.js';
 
 const DEFAULT_QUERY = process.env.STARTUPJOBS_QUERY ?? 'software';
-const DEFAULT_HITS_PER_PAGE = Number(process.env.STARTUPJOBS_HITS_PER_PAGE ?? '20');
-const DEFAULT_MAX_PAGES = Number(process.env.STARTUPJOBS_MAX_PAGES ?? '5');
+const DEFAULT_REQUESTED_COUNT = Number(process.env.STARTUPJOBS_MAX_RESULTS ?? '20');
 
 function getOptionalEnv(name: string): string | undefined {
     const value = process.env[name]?.trim();
@@ -13,8 +12,7 @@ function getOptionalEnv(name: string): string | undefined {
 
 const records = await scrapeStartupJobsViaAlgolia({
     query: DEFAULT_QUERY,
-    hitsPerPage: Number.isFinite(DEFAULT_HITS_PER_PAGE) ? DEFAULT_HITS_PER_PAGE : 20,
-    maxPages: Number.isFinite(DEFAULT_MAX_PAGES) ? DEFAULT_MAX_PAGES : 5,
+    requestedCount: Number.isFinite(DEFAULT_REQUESTED_COUNT) ? DEFAULT_REQUESTED_COUNT : 20,
     aroundLatLng: getOptionalEnv('STARTUPJOBS_AROUND_LAT_LNG'),
     aroundRadius: getOptionalEnv('STARTUPJOBS_AROUND_RADIUS'),
     filters: getOptionalEnv('STARTUPJOBS_FILTERS'),
