@@ -18,7 +18,7 @@ npm install startup-jobs-scraper
 Browser binaries are not downloaded automatically on install. If you want detail-page enrichment, install them explicitly:
 
 ```bash
-npm run browsers:install
+npx playwright install
 ```
 
 ## Usage

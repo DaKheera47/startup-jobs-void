@@ -52,7 +52,6 @@
     },
     "dependencies": {
         "apify": "^3.7.0",
-        "camoufox-js": "^0.9.0",
         "cheerio": "^1.2.0",
         "crawlee": "^3.0.0",
         "playwright": "*",
@@ -72,7 +71,6 @@
         "test": "node --import tsx --test test/**/*.test.ts",
         "actor:start": "node dist/main.js",
         "actor:start:dev": "tsx src/main.ts",
-        "browsers:install": "camoufox-js fetch",
         "algolia:extract": "tsx src/extractAlgolia.ts"
     },
     "author": "ssarfaraz",

@@ -1,9 +1,7 @@
-import { launchOptions } from 'camoufox-js';
 import { Actor, log } from 'apify';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import { firefox } from 'playwright';
-import type { BrowserContext } from 'playwright';
+import { createSession } from 'wreq-js';
 
 const META_CONTENT_RE = /<meta\b[^>]*name=["']([^"']+)["'][^>]*content=["']([^"']*)["'][^>]*>/gi;
 const STARTUP_JOBS_URL = 'https://startup.jobs/?loc=Preston%2C+Lancashire%2C+United+Kingdom&q=Software&latlng=53.759%2C-2.699&since=30d&page=2';
@@ -17,10 +15,18 @@ export interface AlgoliaConfig {
     indexPost: string;
 }
 
+interface StoredDebugCookie {
+    domain?: string;
+    name: string;
+    path?: string;
+    secure?: boolean;
+    value: string;
+}
+
 export { USER_AGENT };
 export { ALGOLIA_DEBUG_COOKIES_PATH };
 
-async function saveAlgoliaDebugCookies(url: string, cookies: Awaited<ReturnType<BrowserContext['cookies']>>) {
+async function saveAlgoliaDebugCookies(url: string, cookies: StoredDebugCookie[]) {
     const payload = {
         capturedAt: new Date().toISOString(),
         cookieCount: cookies.length,
@@ -73,23 +79,47 @@ export function extractAlgoliaConfig(html: string): AlgoliaConfig {
     return { applicationId, apiKeySearch, indexPost };
 }
 
+function toStoredDebugCookies(url: string, cookies: Record<string, string>): StoredDebugCookie[] {
+    const { hostname, pathname, protocol } = new URL(url);
+    const secure = protocol === 'https:';
+
+    return Object.entries(cookies).map(([name, value]) => ({
+        domain: hostname,
+        name,
+        path: pathname || '/',
+        secure,
+        value,
+    }));
+}
+
 export async function extractAlgoliaConfigInBrowser(): Promise<AlgoliaConfig> {
-    log.info('Launching browser to extract Algolia config', { url: STARTUP_JOBS_URL });
-    const browser = await firefox.launch(
-        await launchOptions({
-            headless: true,
-        }),
-    );
-    const page = await browser.newPage({ userAgent: USER_AGENT });
+    log.info('Creating wreq session to extract Algolia config', { url: STARTUP_JOBS_URL });
+    const session = await createSession({
+        browser: 'chrome_136',
+        os: 'macos',
+        defaultHeaders: {
+            accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+            'accept-language': 'en-US,en;q=0.9',
+            'user-agent': USER_AGENT,
+        },
+    });
 
     try {
-        log.info('Opening startup.jobs search page for Algolia config');
-        await page.goto(STARTUP_JOBS_URL, { waitUntil: 'domcontentloaded' });
-        log.info('Waiting for search input selector to confirm page loaded', { selector: '#alert_query' });
-        await page.waitForSelector('#alert_query', { timeout: 30_000 });
-        await saveAlgoliaDebugCookies(STARTUP_JOBS_URL, await page.context().cookies());
+        log.info('Opening startup.jobs search page for Algolia config via wreq');
+        const response = await session.fetch(STARTUP_JOBS_URL, {
+            headers: {
+                referer: 'https://startup.jobs/',
+                'upgrade-insecure-requests': '1',
+            },
+            timeout: 60_000,
+        });
 
-        const html = await page.content();
+        if (!response.ok) {
+            throw new Error(`startup.jobs bootstrap request failed: ${response.status}`);
+        }
+
+        const html = await response.text();
+        await saveAlgoliaDebugCookies(STARTUP_JOBS_URL, toStoredDebugCookies(STARTUP_JOBS_URL, session.getCookies(STARTUP_JOBS_URL)));
         const config = extractAlgoliaConfig(html);
         log.info('Extracted Algolia config from page metadata', {
             applicationId: config.applicationId,
@@ -97,8 +127,7 @@ export async function extractAlgoliaConfigInBrowser(): Promise<AlgoliaConfig> {
         });
         return config;
     } finally {
-        await page.close();
-        await browser.close();
-        log.info('Closed browser used for Algolia config extraction');
+        await session.close();
+        log.info('Closed wreq session used for Algolia config extraction');
     }
 }
