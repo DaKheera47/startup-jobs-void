@@ -1,4 +1,4 @@
-import { log } from 'apify';
+import { Actor, log } from 'apify';
 import { load } from 'cheerio';
 import { readFile } from 'node:fs/promises';
 import { createSession } from 'wreq-js';
@@ -78,9 +78,11 @@ interface JobPostingJsonLd {
 }
 
 export async function createStartupJobsDetailSession(): Promise<Session> {
+    const proxyUrl = await resolveResidentialProxyUrl();
     const session = await createSession({
         browser: DETAIL_BROWSER_PROFILE,
         os: DETAIL_OS_PROFILE,
+        proxy: proxyUrl,
         defaultHeaders: {
             accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
             'accept-language': 'en-US,en;q=0.9',
@@ -154,6 +156,28 @@ async function readDebugCookiesPayload(): Promise<StoredDebugCookiesPayload | nu
             path: ALGOLIA_DEBUG_COOKIES_PATH,
         });
         return null;
+    }
+}
+
+async function resolveResidentialProxyUrl(): Promise<string | undefined> {
+    try {
+        const proxyConfiguration = await Actor.createProxyConfiguration({
+            groups: ['RESIDENTIAL'],
+        });
+        const proxyUrl = await proxyConfiguration?.newUrl();
+
+        if (proxyUrl) {
+            log.info('Using residential Apify proxy for startup.jobs detail enrichment');
+            return proxyUrl;
+        }
+
+        log.warning('Apify proxy configuration returned no residential proxy URL for detail enrichment');
+        return undefined;
+    } catch (error) {
+        log.warning('Unable to configure residential Apify proxy for detail enrichment; continuing without proxy', {
+            error: error instanceof Error ? error.message : String(error),
+        });
+        return undefined;
     }
 }
 
