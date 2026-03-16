@@ -44,6 +44,7 @@ Supported options include:
 - `query`
 - `requestedCount`
 - `enrichDetails`
+- `location`
 - `aroundLatLng`
 - `aroundRadius`
 - `page`
@@ -63,6 +64,7 @@ The scraper now builds Algolia filters for the common startup.jobs fields and st
 ```ts
 const jobs = await scrapeStartupJobsViaAlgolia({
   query: 'software engineer',
+  location: 'London, United Kingdom',
   aroundLatLng: '51.5074,-0.1278',
   aroundRadius: 'all',
   since: '7d',
@@ -78,6 +80,8 @@ const jobs = await scrapeStartupJobsViaAlgolia({
 ```
 
 When `enrichDetails` is `false`, the library returns records built directly from Algolia hits without loading each job page.
+
+If you pass `location` without `aroundLatLng`, the scraper resolves the place name through the startup.jobs Algolia Places index and uses the returned coordinates automatically. If you pass both, `aroundLatLng` wins.
 
 Returned records include fields such as:
 
@@ -116,6 +120,16 @@ The same codebase can also run as an Apify Actor, so you can use the shared libr
 For local actor-style runs:
 
 ```bash
+npm run actor:start:dev
+```
+
+Useful environment variables for local runs:
+
+```bash
+STARTUPJOBS_QUERY="software engineer" \
+STARTUPJOBS_LOCATION="London, United Kingdom" \
+STARTUPJOBS_AROUND_RADIUS=25000 \
+STARTUPJOBS_MAX_RESULTS=70 \
 npm run actor:start:dev
 ```
 

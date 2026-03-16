@@ -70,6 +70,37 @@ test('normalizeInput includes facetFilters in scrape options', () => {
             salaryMinUsd: undefined,
             since: undefined,
             workplaceType: undefined,
+            location: undefined,
+            enrichDetails: true,
+        },
+    );
+});
+
+test('normalizeInput includes friendly location input in scrape options', () => {
+    assert.deepEqual(
+        normalizeInput({
+            query: 'engineer',
+            requestedCount: 10,
+            location: 'London, United Kingdom',
+        }),
+        {
+            query: 'engineer',
+            requestedCount: 10,
+            aroundLatLng: undefined,
+            aroundRadius: undefined,
+            detailConcurrency: 8,
+            employmentType: undefined,
+            facetFilters: undefined,
+            experienceBucket: undefined,
+            filters: undefined,
+            hasSalary: undefined,
+            hitsPerPage: undefined,
+            location: 'London, United Kingdom',
+            page: undefined,
+            salaryMaxUsd: undefined,
+            salaryMinUsd: undefined,
+            since: undefined,
+            workplaceType: undefined,
             enrichDetails: true,
         },
     );

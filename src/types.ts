@@ -29,6 +29,7 @@ export interface ScrapeOptions {
     filters?: string;
     hasSalary?: boolean;
     hitsPerPage?: number;
+    location?: string;
     page?: number;
     salaryMaxUsd?: number;
     salaryMinUsd?: number;

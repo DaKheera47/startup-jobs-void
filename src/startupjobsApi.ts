@@ -30,19 +30,34 @@ interface AlgoliaQueryResponse {
     page?: number;
 }
 
+interface StartupJobsPlaceHit {
+    _geoloc?: {
+        lat?: number;
+        lng?: number;
+    };
+    city?: string;
+    country?: string;
+    location_name?: string;
+    state?: string;
+}
+
 export async function scrapeStartupJobsViaAlgolia(options: ScrapeOptions): Promise<StartupJobRecord[]> {
     const detailConcurrency = resolveDetailConcurrency(options.detailConcurrency);
     log.info('Starting startup.jobs scrape via Algolia', {
+        aroundLatLng: options.aroundLatLng,
+        aroundRadius: options.aroundRadius,
         detailConcurrency,
         enrichDetails: options.enrichDetails,
         hitsPerPage: options.hitsPerPage,
+        location: options.location,
         page: options.page,
         query: options.query,
         requestedCount: options.requestedCount,
         since: options.since,
     });
     const config = await extractAlgoliaConfigInBrowser();
-    const payload = buildAlgoliaQueryPayload(options);
+    const resolvedOptions = await resolveLocationOptions(config, options);
+    const payload = buildAlgoliaQueryPayload(resolvedOptions);
     log.info('Querying Algolia for startup.jobs hits', {
         ...payload,
     });
@@ -112,6 +127,70 @@ async function queryAlgolia(
         page: parsed.page,
     });
     return parsed;
+}
+
+async function resolveLocationOptions(
+    config: Awaited<ReturnType<typeof extractAlgoliaConfigInBrowser>>,
+    options: ScrapeOptions,
+): Promise<ScrapeOptions> {
+    if (options.aroundLatLng || !options.location?.trim()) return options;
+
+    const resolvedAroundLatLng = await geocodeStartupJobsLocation(config, options.location);
+
+    if (!resolvedAroundLatLng) {
+        log.warning('Unable to resolve requested location; continuing without aroundLatLng filter', {
+            location: options.location,
+        });
+        return options;
+    }
+
+    log.info('Resolved startup.jobs location to coordinates', {
+        aroundLatLng: resolvedAroundLatLng,
+        location: options.location,
+    });
+
+    return {
+        ...options,
+        aroundLatLng: resolvedAroundLatLng,
+    };
+}
+
+async function geocodeStartupJobsLocation(
+    config: Awaited<ReturnType<typeof extractAlgoliaConfigInBrowser>>,
+    location: string,
+): Promise<string | undefined> {
+    const response = await fetch(`https://${config.applicationId}-dsn.algolia.net/1/indexes/Places_production/query`, {
+        method: 'POST',
+        headers: {
+            'content-type': 'application/json',
+            'user-agent': USER_AGENT,
+            'x-algolia-api-key': config.apiKeySearch,
+            'x-algolia-application-id': config.applicationId,
+        },
+        body: JSON.stringify({
+            hitsPerPage: 1,
+            query: location,
+        }),
+    });
+
+    if (!response.ok) {
+        throw new Error(`Algolia places query failed: ${response.status}`);
+    }
+
+    const parsed = (await response.json()) as { hits?: StartupJobsPlaceHit[] };
+    const hit = parsed.hits?.[0];
+    const lat = hit?._geoloc?.lat;
+    const lng = hit?._geoloc?.lng;
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        log.warning('Startup.jobs places lookup returned no coordinates', {
+            location,
+            matchedPlace: cleanText([hit?.location_name, hit?.city, hit?.state, hit?.country].filter(Boolean).join(', ')),
+        });
+        return undefined;
+    }
+
+    return `${lat},${lng}`;
 }
 
 async function enrichHit(

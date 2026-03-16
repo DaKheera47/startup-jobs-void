@@ -11,6 +11,7 @@ interface StartupJobsActorInput {
     filters?: string;
     hasSalary?: boolean;
     hitsPerPage?: number;
+    location?: string;
     page?: number;
     query?: string;
     requestedCount?: number;
@@ -36,6 +37,7 @@ export function getDefaultInput(): ScrapeOptions {
         filters: process.env.STARTUPJOBS_FILTERS?.trim() || undefined,
         hasSalary: undefined,
         hitsPerPage: undefined,
+        location: process.env.STARTUPJOBS_LOCATION?.trim() || undefined,
         page: undefined,
         salaryMaxUsd: undefined,
         salaryMinUsd: undefined,
@@ -97,6 +99,7 @@ export function normalizeInput(input: StartupJobsActorInput | undefined): Scrape
         filters: input?.filters?.trim() || defaults.filters,
         hasSalary: typeof input?.hasSalary === 'boolean' ? input.hasSalary : defaults.hasSalary,
         hitsPerPage: Number.isFinite(input?.hitsPerPage) ? Number(input?.hitsPerPage) : defaults.hitsPerPage,
+        location: input?.location?.trim() || defaults.location,
         page: Number.isFinite(input?.page) ? Number(input?.page) : defaults.page,
         salaryMaxUsd: Number.isFinite(input?.salaryMaxUsd) ? Number(input?.salaryMaxUsd) : defaults.salaryMaxUsd,
         salaryMinUsd: Number.isFinite(input?.salaryMinUsd) ? Number(input?.salaryMinUsd) : defaults.salaryMinUsd,
