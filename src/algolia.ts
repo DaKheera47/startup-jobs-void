@@ -8,6 +8,8 @@ const STARTUP_JOBS_URL = 'https://startup.jobs/?loc=Preston%2C+Lancashire%2C+Uni
 const USER_AGENT =
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36';
 const ALGOLIA_DEBUG_COOKIES_PATH = './storage/key_value_stores/default/algolia-debug-cookies.json';
+const BOOTSTRAP_MAX_ATTEMPTS = 4;
+const BOOTSTRAP_INITIAL_BACKOFF_MS = 1_000;
 
 export interface AlgoliaConfig {
     apiKeySearch: string;
@@ -25,6 +27,12 @@ interface StoredDebugCookie {
 
 export { USER_AGENT };
 export { ALGOLIA_DEBUG_COOKIES_PATH };
+
+function delay(ms: number): Promise<void> {
+    return new Promise((resolve) => {
+        setTimeout(resolve, ms);
+    });
+}
 
 async function saveAlgoliaDebugCookies(url: string, cookies: StoredDebugCookie[]) {
     const payload = {
@@ -106,19 +114,51 @@ export async function extractAlgoliaConfigInBrowser(): Promise<AlgoliaConfig> {
 
     try {
         log.info('Opening startup.jobs search page for Algolia config via wreq');
-        const response = await session.fetch(STARTUP_JOBS_URL, {
-            headers: {
-                referer: 'https://startup.jobs/',
-                'upgrade-insecure-requests': '1',
-            },
-            timeout: 60_000,
-        });
+        let html: string | undefined;
 
-        if (!response.ok) {
-            throw new Error(`startup.jobs bootstrap request failed: ${response.status}`);
+        for (let attempt = 1; attempt <= BOOTSTRAP_MAX_ATTEMPTS; attempt += 1) {
+            try {
+                const response = await session.fetch(STARTUP_JOBS_URL, {
+                    headers: {
+                        referer: 'https://startup.jobs/',
+                        'upgrade-insecure-requests': '1',
+                    },
+                    timeout: 60_000,
+                });
+
+                if (!response.ok) {
+                    throw new Error(`startup.jobs bootstrap request failed: ${response.status}`);
+                }
+
+                if (attempt > 1) {
+                    log.info('startup.jobs bootstrap request succeeded after retry', {
+                        attempt,
+                        maxAttempts: BOOTSTRAP_MAX_ATTEMPTS,
+                    });
+                }
+
+                html = await response.text();
+
+                break;
+            } catch (error) {
+                if (attempt === BOOTSTRAP_MAX_ATTEMPTS) {
+                    throw error;
+                }
+
+                const backoffMs = BOOTSTRAP_INITIAL_BACKOFF_MS * 2 ** (attempt - 1);
+                log.warning('startup.jobs bootstrap request failed, retrying with exponential backoff', {
+                    attempt,
+                    backoffMs,
+                    error: error instanceof Error ? error.message : String(error),
+                    maxAttempts: BOOTSTRAP_MAX_ATTEMPTS,
+                });
+
+                await delay(backoffMs);
+            }
         }
 
-        const html = await response.text();
+        if (!html) throw new Error('startup.jobs bootstrap request did not return a response');
+
         await saveAlgoliaDebugCookies(STARTUP_JOBS_URL, toStoredDebugCookies(STARTUP_JOBS_URL, session.getCookies(STARTUP_JOBS_URL)));
         const config = extractAlgoliaConfig(html);
         log.info('Extracted Algolia config from page metadata', {
