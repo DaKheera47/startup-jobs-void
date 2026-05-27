@@ -8,6 +8,7 @@ export interface StartupJobRecord {
     deadline?: string;
     salary?: string;
     location?: string;
+    publishedAt?: string;
     degreeRequired?: string;
     starting?: string;
     jobDescription?: string;

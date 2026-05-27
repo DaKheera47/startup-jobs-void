@@ -16,6 +16,7 @@ interface StartupJobsAlgoliaHit {
     employment_type?: string;
     location?: string;
     path?: string;
+    published_at_iso8601?: string;
     salary_currency?: string;
     salary_interval?: string;
     salary_max?: number | null;
@@ -234,6 +235,7 @@ function buildRecordFromHit(hit: StartupJobsAlgoliaHit): StartupJobRecord {
         disciplines: cleanText([...(hit._tags ?? []), employmentType].filter(Boolean).join(' | ')) ?? undefined,
         salary: formatSalaryFromHit(hit),
         location,
+        publishedAt: cleanText(hit.published_at_iso8601) ?? undefined,
         jobDescription: undefined,
     };
 }

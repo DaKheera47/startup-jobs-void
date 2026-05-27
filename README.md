@@ -93,6 +93,7 @@ Returned records include fields such as:
 - `salary`
 - `disciplines`
 - `applicationLink`
+- `publishedAt`
 - `jobDescription`
 
 ## Example output
@@ -107,6 +108,7 @@ Returned records include fields such as:
     location: 'Remote | Europe',
     salary: '$120,000 - $150,000 per year',
     disciplines: 'Engineering | full-time',
+    publishedAt: '2026-05-22T08:41:29Z',
     applicationLink: 'https://startup.jobs/apply/example-job',
     jobDescription: '...'
   }
