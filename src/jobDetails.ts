@@ -270,6 +270,7 @@ export function extractJobPageFromHtml(
         deadline: cleanText(jsonLd?.validThrough) ?? baseRecord.deadline,
         salary,
         location,
+        publishedAt: baseRecord.publishedAt,
         degreeRequired: extractDegreeRequirement(descriptionText),
         starting: extractStarting(descriptionText),
         jobDescription: descriptionText,

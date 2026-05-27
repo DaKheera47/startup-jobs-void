@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import { buildAlgoliaQueryPayload } from '../src/algoliaQuery.js';
 import { extractAlgoliaConfig } from '../src/algolia.js';
+import { extractJobPageFromHtml } from '../src/jobDetails.js';
 import { normalizeAroundRadius, normalizeFacetFilters, normalizeInput } from '../src/input.js';
 
 test('extractAlgoliaConfig reads startup.jobs Algolia metadata', () => {
@@ -148,5 +149,32 @@ test('buildAlgoliaQueryPayload maps typed filters to Algolia query fields', () =
             hitsPerPage: 50,
             page: 2,
         },
+    );
+});
+
+test('extractJobPageFromHtml preserves publishedAt from the Algolia base record', () => {
+    const baseRecord = {
+        title: 'Backend Engineer',
+        employer: 'Acme',
+        jobUrl: 'https://startup.jobs/backend-engineer-acme-123',
+        publishedAt: '2026-05-22T08:41:29Z',
+        jobDescription: undefined,
+    };
+
+    const html = `
+        <html>
+            <body>
+                <h1>Senior Backend Engineer</h1>
+                <a href="/company/acme">Acme Inc.</a>
+                <div class="post__content">
+                    <div class="trix-content">Build reliable systems with a kind team.</div>
+                </div>
+            </body>
+        </html>
+    `;
+
+    assert.equal(
+        extractJobPageFromHtml(html, 'https://startup.jobs/backend-engineer-acme-123', baseRecord).publishedAt,
+        '2026-05-22T08:41:29Z',
     );
 });
