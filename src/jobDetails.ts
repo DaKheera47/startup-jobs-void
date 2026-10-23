@@ -197,7 +197,8 @@ export function extractJobPageFromHtml(
     const jsonLd = extractJobPostingJsonLd($);
 
     const companyAnchors = $('a[href^="/company/"]');
-    const companyAnchor = companyAnchors.last();
+    const headerCompanyAnchor = $('h1').first().prev('a[href^="/company/"]');
+    const companyAnchor = headerCompanyAnchor.length > 0 ? headerCompanyAnchor : companyAnchors.last();
     const companyProfileUrl = toAbsoluteUrl(companyAnchor.attr('href')) ?? undefined;
     const employerWebsite =
         cleanText($('a[target="_blank"][rel*="nofollow"][href^="http"]').first().attr('href')) ??
@@ -262,7 +263,7 @@ export function extractJobPageFromHtml(
 
     return {
         title: cleanText($('h1').first().text()) ?? jsonLd?.title ?? baseRecord.title,
-        employer: sanitizeEmployerName(cleanText(companyAnchor.text())) ?? sanitizeEmployerName(getHiringOrganizationName(jsonLd)) ?? baseRecord.employer,
+        employer: sanitizeEmployerName(getHiringOrganizationName(jsonLd)) ?? sanitizeEmployerName(cleanText(companyAnchor.text())) ?? baseRecord.employer,
         employerUrl: employerWebsite ?? toAbsoluteUrl(companyAnchor.attr('href')) ?? baseRecord.employerUrl,
         jobUrl: pageUrl,
         applicationLink: applicationLink ?? baseRecord.applicationLink,

@@ -178,3 +178,69 @@ test('extractJobPageFromHtml preserves publishedAt from the Algolia base record'
         '2026-05-22T08:41:29Z',
     );
 });
+
+test('extractJobPageFromHtml reads the company name anchor beside the job title, not the "View company profile" link', () => {
+    const baseRecord = {
+        title: 'Graduate Software Engineer',
+        employer: 'Unknown Employer',
+        jobUrl: 'https://startup.jobs/graduate-software-engineer-optiver-9013143',
+        publishedAt: undefined,
+        jobDescription: undefined,
+    };
+
+    // Mirrors the real startup.jobs detail page layout: a header company link right
+    // before the <h1>, a duplicated company card further down, and a "View company
+    // profile" CTA at the bottom of the sidebar — all sharing the same /company/ href.
+    const html = `
+        <html>
+            <body>
+                <div class="flex gap-3 items-center">
+                    <a href="/company/optiver"><img alt="Optiver"></a>
+                    <div>
+                        <a href="/company/optiver">Optiver</a>
+                        <h1>Graduate Software Engineer</h1>
+                    </div>
+                </div>
+                <div class="rounded-lg">
+                    <a href="/company/optiver"><img alt="Optiver"></a>
+                    <a href="/company/optiver">Optiver</a>
+                    <a href="/company/optiver">View company profile</a>
+                </div>
+            </body>
+        </html>
+    `;
+
+    const record = extractJobPageFromHtml(html, baseRecord.jobUrl, baseRecord);
+
+    assert.equal(record.employer, 'Optiver');
+});
+
+test('extractJobPageFromHtml prefers the JobPosting JSON-LD hiringOrganization name over DOM text', () => {
+    const baseRecord = {
+        title: 'Graduate Software Engineer',
+        employer: 'Unknown Employer',
+        jobUrl: 'https://startup.jobs/graduate-software-engineer-optiver-9013143',
+        publishedAt: undefined,
+        jobDescription: undefined,
+    };
+
+    const html = `
+        <html>
+            <head>
+                <script type="application/ld+json">
+                    {"@type":"JobPosting","hiringOrganization":{"@type":"Organization","name":"Optiver"}}
+                </script>
+            </head>
+            <body>
+                <div>
+                    <a href="/company/optiver">optiver-legacy-slug</a>
+                    <h1>Graduate Software Engineer</h1>
+                </div>
+            </body>
+        </html>
+    `;
+
+    const record = extractJobPageFromHtml(html, baseRecord.jobUrl, baseRecord);
+
+    assert.equal(record.employer, 'Optiver');
+});
